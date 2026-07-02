@@ -1,0 +1,1373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mythward — Island of Fortuna</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0a0a0f; color: #d4c5a0; font-family: 'Georgia', serif; height: 100vh; display: flex; flex-direction: column; }
+#header { background: #1a1520; border-bottom: 2px solid #5a4a2a; padding: 6px 12px; display: flex; align-items: center; gap: 16px; }
+#header h1 { font-size: 18px; color: #c8a84b; letter-spacing: 2px; }
+#statbar { display: flex; gap: 12px; font-size: 13px; }
+.stat-hp { color: #e05a5a; } .stat-mp { color: #5a8ae0; } .stat-gold { color: #c8a84b; } .stat-xp { color: #7ac87a; }
+#main { display: flex; flex: 1; overflow: hidden; }
+#game-area { position: relative; flex: 1; min-width: 0; }
+#game-canvas { display: block; width: 100%; height: 100%; }
+#npc-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+.npc-sprite { position: absolute; transform: translate(-50%, -50%); cursor: pointer; pointer-events: all; text-align: center; transition: transform 0.15s; }
+.npc-sprite:hover { transform: translate(-50%, -50%) scale(1.08); }
+.npc-sprite img { width: 72px; height: 72px; object-fit: cover; border: 2px solid #5a4a2a; border-radius: 4px; display: block; background: #2a2020; }
+.npc-sprite .npc-label { font-size: 11px; color: #c8a84b; text-shadow: 1px 1px 2px #000; margin-top: 2px; white-space: nowrap; }
+.exit-btn { position: absolute; background: rgba(20,15,30,0.85); border: 1px solid #5a4a2a; color: #c8a84b; padding: 6px 10px; cursor: pointer; font-size: 12px; border-radius: 3px; pointer-events: all; }
+.exit-btn:hover { background: rgba(90,74,42,0.6); border-color: #c8a84b; }
+#sidebar { width: 260px; background: #12101a; border-left: 2px solid #2a2035; display: flex; flex-direction: column; }
+#tab-bar { display: flex; border-bottom: 1px solid #2a2035; }
+.tab { flex: 1; padding: 7px 4px; text-align: center; cursor: pointer; font-size: 12px; background: #1a1828; color: #8a7a5a; border: none; }
+.tab.active { background: #2a2035; color: #c8a84b; border-bottom: 2px solid #c8a84b; }
+#tab-content { flex: 1; overflow-y: auto; padding: 8px; font-size: 12px; }
+.inv-item { display: flex; align-items: center; gap: 6px; padding: 4px; border-radius: 3px; cursor: pointer; border: 1px solid transparent; margin-bottom: 2px; }
+.inv-item:hover { border-color: #5a4a2a; background: #1e1c2a; }
+.inv-item img { width: 32px; height: 32px; object-fit: contain; background: #0d0b15; border: 1px solid #2a2035; }
+.inv-item .iname { color: #d4c5a0; flex: 1; }
+.inv-item .iqty { color: #8a7a5a; }
+.equip-slot { display: flex; align-items: center; gap: 6px; padding: 5px; margin: 2px 0; background: #1a1828; border: 1px solid #2a2035; border-radius: 3px; cursor: pointer; }
+.equip-slot img { width: 28px; height: 28px; object-fit: contain; }
+.equip-slot .slot-name { color: #6a6080; font-size: 11px; }
+.equip-slot .slot-item { color: #c8a84b; font-size: 12px; }
+#log-area { height: 130px; background: #0d0b15; border-top: 2px solid #2a2035; display: flex; flex-direction: column; }
+#log-header { padding: 4px 10px; font-size: 11px; color: #6a6080; background: #12101a; border-bottom: 1px solid #1a1828; }
+#log { flex: 1; overflow-y: auto; padding: 6px 10px; font-size: 12px; line-height: 1.5; }
+.log-line { padding: 1px 0; }
+.log-line.combat { color: #e05a5a; }
+.log-line.info { color: #7ac87a; }
+.log-line.loot { color: #c8a84b; }
+.log-line.warn { color: #e09050; }
+/* OVERLAYS */
+#overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; z-index: 100; align-items: center; justify-content: center; }
+#overlay.active { display: flex; }
+#overlay-box { background: #1a1520; border: 2px solid #5a4a2a; border-radius: 6px; padding: 20px; max-width: 520px; width: 90%; max-height: 80vh; overflow-y: auto; }
+#overlay-box h2 { color: #c8a84b; margin-bottom: 10px; font-size: 16px; }
+.dlg-portrait { display: flex; gap: 14px; margin-bottom: 12px; }
+.dlg-portrait img { width: 80px; height: 80px; object-fit: cover; border: 2px solid #5a4a2a; flex-shrink: 0; }
+.dlg-text { font-size: 13px; line-height: 1.6; color: #d4c5a0; }
+.dlg-options { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.dlg-btn { background: #2a2035; border: 1px solid #5a4a2a; color: #d4c5a0; padding: 8px 12px; cursor: pointer; border-radius: 3px; text-align: left; font-size: 13px; }
+.dlg-btn:hover { background: #3a3050; border-color: #c8a84b; color: #c8a84b; }
+/* COMBAT */
+#combat-overlay { position: fixed; inset: 0; background: #0a0810; display: none; z-index: 200; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
+#combat-overlay.active { display: flex; }
+#combat-arena { display: flex; gap: 60px; align-items: flex-end; justify-content: center; }
+.combatant { text-align: center; width: 120px; }
+.combatant img { width: 90px; height: 90px; object-fit: contain; border: 2px solid #5a4a2a; border-radius: 4px; background: #1a1520; }
+.combatant .cname { color: #c8a84b; font-size: 13px; margin-top: 4px; }
+.hp-bar-wrap { background: #1a1520; height: 10px; border-radius: 3px; margin: 4px 0; overflow: hidden; }
+.hp-bar { background: #7ac87a; height: 100%; transition: width 0.3s; }
+.hp-bar.low { background: #e05a5a; }
+#combat-log { background: #12101a; border: 1px solid #2a2035; width: 480px; height: 90px; overflow-y: auto; padding: 8px; font-size: 12px; border-radius: 4px; }
+#combat-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.combat-btn { background: #2a2035; border: 1px solid #5a4a2a; color: #d4c5a0; padding: 10px 16px; cursor: pointer; border-radius: 4px; font-size: 13px; min-width: 90px; }
+.combat-btn:hover:not(:disabled) { background: #3a3050; border-color: #c8a84b; color: #c8a84b; }
+.combat-btn:disabled { opacity: 0.4; cursor: default; }
+#combat-turn-label { color: #6a6080; font-size: 12px; }
+/* SHOP */
+.shop-item { display: flex; align-items: center; gap: 8px; padding: 6px; border-bottom: 1px solid #1a1828; }
+.shop-item img { width: 36px; height: 36px; object-fit: contain; background: #0d0b15; }
+.shop-item .sname { flex: 1; color: #d4c5a0; font-size: 13px; }
+.shop-item .sprice { color: #c8a84b; font-size: 12px; margin-right: 6px; }
+.shop-btn { background: #2a2035; border: 1px solid #3a3050; color: #c8a84b; padding: 4px 8px; cursor: pointer; font-size: 11px; border-radius: 3px; }
+.shop-btn:hover { background: #3a3050; }
+/* SCROLL */
+::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #0d0b15; } ::-webkit-scrollbar-thumb { background: #2a2035; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>⚔ MYTHWARD</h1>
+  <div id="statbar">
+    <span class="stat-hp" id="s-hp">HP: 100/100</span>
+    <span class="stat-mp" id="s-mp">MP: 50/50</span>
+    <span class="stat-gold" id="s-gold">Gold: 50</span>
+    <span class="stat-xp" id="s-xp">XP: 0/100</span>
+    <span id="s-level" style="color:#8a7a5a">Lv.1</span>
+    <span id="s-wanted" style="color:#e05a5a; display:none">⚠ WANTED</span>
+  </div>
+</div>
+
+<div id="main">
+  <div id="game-area">
+    <canvas id="game-canvas"></canvas>
+    <div id="npc-layer"></div>
+  </div>
+  <div id="sidebar">
+    <div id="tab-bar">
+      <button class="tab active" onclick="showTab('inv')">Inventory</button>
+      <button class="tab" onclick="showTab('equip')">Equipment</button>
+      <button class="tab" onclick="showTab('quests')">Quests</button>
+      <button class="tab" onclick="showTab('skills')">Skills</button>
+    </div>
+    <div id="tab-content"></div>
+  </div>
+</div>
+
+<div id="log-area">
+  <div id="log-header">— Adventure Log —</div>
+  <div id="log"></div>
+</div>
+
+<!-- DIALOGUE OVERLAY -->
+<div id="overlay">
+  <div id="overlay-box" id="overlay-inner"></div>
+</div>
+
+<!-- COMBAT OVERLAY -->
+<div id="combat-overlay">
+  <div id="combat-turn-label">Your Turn</div>
+  <div id="combat-arena">
+    <div class="combatant" id="c-player">
+      <img id="c-player-img" src="" alt="Player">
+      <div class="cname" id="c-player-name">Adventurer</div>
+      <div class="hp-bar-wrap"><div class="hp-bar" id="c-player-hp" style="width:100%"></div></div>
+      <div style="font-size:11px;color:#888" id="c-player-hp-text">100/100</div>
+    </div>
+    <div style="font-size:28px;color:#5a4a2a;align-self:center">VS</div>
+    <div class="combatant" id="c-enemy">
+      <img id="c-enemy-img" src="" alt="Enemy">
+      <div class="cname" id="c-enemy-name">Enemy</div>
+      <div class="hp-bar-wrap"><div class="hp-bar" id="c-enemy-hp" style="width:100%"></div></div>
+      <div style="font-size:11px;color:#888" id="c-enemy-hp-text">50/50</div>
+    </div>
+  </div>
+  <div id="combat-log"></div>
+  <div id="combat-actions">
+    <button class="combat-btn" onclick="combatAction('attack')">⚔ Attack</button>
+    <button class="combat-btn" onclick="combatAction('defend')">🛡 Defend</button>
+    <button class="combat-btn" onclick="combatAction('item')">🧪 Use Item</button>
+    <button class="combat-btn" onclick="combatAction('flee')">💨 Flee</button>
+    <button class="combat-btn" id="combat-skill-btn" onclick="combatAction('skill')" disabled>✨ Skill</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// ASSET BASE PATH
+// ============================================================
+const A = 'file:///C:/Users/user/OneDrive/Desktop/Projects/assets/';
+const PLAYER_IMG = A + 'characters/Human/Men_Human/Human_01_archer.PNG';
+
+// ============================================================
+// ITEM DATABASE
+// ============================================================
+const ITEMS = {
+  // Weapons
+  sword_01:    { id:'sword_01',    name:'Iron Sword',      type:'weapon', slot:'weapon', img:A+'icons/weapons/Sword_01.PNG',     atk:5,  val:80  },
+  sword_10:    { id:'sword_10',    name:'Knight Sword',    type:'weapon', slot:'weapon', img:A+'icons/weapons/Sword_10.PNG',     atk:9,  val:180 },
+  dagger_01:   { id:'dagger_01',   name:'Dagger',          type:'weapon', slot:'weapon', img:A+'icons/weapons/Dagger_01.PNG',    atk:3,  val:40  },
+  axe_01:      { id:'axe_01',      name:'Axe',             type:'weapon', slot:'weapon', img:A+'icons/weapons/Axe_01.PNG',       atk:4,  val:55  },
+  bow_01:      { id:'bow_01',      name:'Hunting Bow',     type:'weapon', slot:'weapon', img:A+'icons/weapons/Bow_01.PNG',       atk:4,  val:65, range:true },
+  staff_1:     { id:'staff_1',     name:'Mage Staff',      type:'weapon', slot:'weapon', img:A+'icons/weapons/staff_1.PNG',      atk:3,  val:70, mpBonus:10 },
+  wand:        { id:'wand',        name:'Wand',            type:'weapon', slot:'weapon', img:A+'icons/weapons/Wand.PNG',         atk:2,  val:50, mpBonus:5 },
+  // Armor
+  leather_chest: { id:'leather_chest', name:'Leather Vest',  type:'armor', slot:'chest', img:A+'icons/armor/LeatherVest.PNG',    def:3, val:60  },
+  gambeson:    { id:'gambeson',    name:'Gambeson',        type:'armor', slot:'chest', img:A+'icons/armor/Gambesons.PNG',        def:4, val:75  },
+  mail_chest:  { id:'mail_chest',  name:'Chain Mail',      type:'armor', slot:'chest', img:A+'icons/armor/MailChest.PNG',       def:7, val:150 },
+  iron_helm:   { id:'iron_helm',   name:'Iron Helm',       type:'armor', slot:'helm',  img:A+'icons/armor/MetalHelmet.PNG',     def:2, val:45  },
+  basic_helm:  { id:'basic_helm',  name:'Basic Helm',      type:'armor', slot:'helm',  img:A+'icons/armor/BasicHelm.PNG',       def:1, val:25  },
+  leather_boots: { id:'leather_boots', name:'Leather Boots', type:'armor', slot:'boots', img:A+'icons/armor/LeatherBoots.PNG',  def:1, val:30 },
+  plate_boots: { id:'plate_boots', name:'Plate Boots',     type:'armor', slot:'boots', img:A+'icons/armor/PlateBoots.PNG',      def:3, val:90  },
+  // Potions / consumables
+  heal_sm:     { id:'heal_sm',     name:'Healing Potion',  type:'potion', img:A+'icons/professions/ProfessionAndCraftIcons/Alchemy/Alchemy_13_heal_potion.PNG',       hp:30,  val:25 },
+  heal_md:     { id:'heal_md',     name:'Greater Healing', type:'potion', img:A+'icons/professions/ProfessionAndCraftIcons/Alchemy/Alchemy_46_middleheal_flask.PNG',   hp:60,  val:50 },
+  heal_lg:     { id:'heal_lg',     name:'Full Restore',    type:'potion', img:A+'icons/professions/ProfessionAndCraftIcons/Alchemy/Alchemy_54_hugeheal_flask.PNG',      hp:999, val:100 },
+  mana_sm:     { id:'mana_sm',     name:'Mana Potion',     type:'potion', img:A+'icons/professions/ProfessionAndCraftIcons/Alchemy/Alchemy_20_littlemana_flask.PNG',    mp:25,  val:25 },
+  poison_vial: { id:'poison_vial', name:'Vial of Poison',  type:'potion', img:A+'icons/professions/ProfessionAndCraftIcons/Alchemy/Alchemy_05_poison.PNG',             dot:20, val:35, illegal:true, combat:true },
+  // Scrolls / skills
+  fire_scroll: { id:'fire_scroll', name:'Fire Scroll',     type:'scroll', img:A+'icons/resourcesandfood/Scroll_fire.PNG',         spell:'fireball',  mpCost:15, dmg:30, val:40, combat:true },
+  sleep_scroll:{ id:'sleep_scroll',name:'Sleep Scroll',    type:'scroll', img:A+'icons/resourcesandfood/Scroll_sleep.PNG',        spell:'sleep',     mpCost:10, stun:2, val:30, combat:true },
+  enchant_scroll:{ id:'enchant_scroll', name:'Enchant Scroll', type:'scroll', img:A+'icons/resourcesandfood/Scroll_enchant.PNG', val:50 },
+  // Materials
+  iron_bar:    { id:'iron_bar',    name:'Iron Bar',        type:'material', img:A+'icons/resourcesandfood/Res_07_ironbar.PNG',   val:15 },
+  silver_bar:  { id:'silver_bar',  name:'Silver Bar',      type:'material', img:A+'icons/resourcesandfood/Res_01_silverbar.PNG', val:40 },
+  leather_mat: { id:'leather_mat', name:'Leather',         type:'material', img:A+'icons/loot/Loot_112_leather.PNG',            val:8  },
+  rune_stone:  { id:'rune_stone',  name:'Rune Stone',      type:'material', img:A+'icons/loot/Loot_27_rune.PNG',                val:20, enchant:true },
+  magic_dust:  { id:'magic_dust',  name:'Magic Dust',      type:'material', img:A+'icons/professions/ProfessionAndCraftIcons/Enchantment/Enchantment_04_magicdust.PNG', val:15, enchant:true },
+  herbs_heal:  { id:'herbs_heal',  name:'Healleaves',      type:'herb', img:A+'icons/professions/ProfessionAndCraftIcons/Herbalism/Herbalism_43_healleaves.PNG',        val:5  },
+  herbs_poison:{ id:'herbs_poison',name:'Poison Herb',     type:'herb', img:A+'icons/professions/ProfessionAndCraftIcons/Herbalism/Herbalism_40_poisonousherbs.PNG',    val:8, illegal:true },
+  coal:        { id:'coal',        name:'Coal',            type:'material', img:A+'icons/resourcesandfood/Coal.PNG',            val:5  },
+  // Food
+  bread:       { id:'bread',       name:'Bread',           type:'food', img:A+'icons/resourcesandfood/Bread.PNG',              hp:5,   val:3  },
+  steak:       { id:'steak',       name:'Steak',           type:'food', img:A+'icons/loot/Loot_89_steak.PNG',                  hp:15,  val:8  },
+  beer:        { id:'beer',        name:'Ale',             type:'food', img:A+'icons/professions/ProfessionAndCraftIcons/Cooking_fishing/Cooking_50_beer.PNG', hp:5, mp:5, val:5 },
+  // Keys & quest
+  mine_key:    { id:'mine_key',    name:'Mine Key',        type:'key', img:A+'icons/loot/Loot_54_key.PNG',  val:0 },
+  mayors_seal: { id:'mayors_seal', name:"Mayor's Seal",    type:'quest', img:A+'icons/quest/Quest_21_order.PNG', val:0 },
+  rift_shard:  { id:'rift_shard',  name:'Rift Shard',      type:'quest', img:A+'icons/loot/Loot_131_crystal.PNG', val:100, desc:'A crackling fragment of the Rift tear. Dangerous.' },
+  elf_relic:   { id:'elf_relic',   name:'Elven Relic',     type:'quest', img:A+'icons/loot/Loot_186_ancient.PNG', val:0 },
+};
+
+// ============================================================
+// ENEMY DATABASE
+// ============================================================
+const ENEMIES = {
+  goblin_scout:   { id:'goblin_scout',   name:'Goblin Scout',    img:A+'characters/Goblin/Goblin Males/goblin_03.PNG',          hp:25, atk:4, def:1, xp:20, gold:[2,8],   loot:[['dagger_01',0.15],['heal_sm',0.1]] },
+  goblin_warrior: { id:'goblin_warrior', name:'Goblin Warrior',  img:A+'characters/Goblin/Goblin Males/goblin_05.PNG',          hp:45, atk:7, def:2, xp:35, gold:[5,15],  loot:[['leather_mat',0.3],['axe_01',0.1]] },
+  mine_spider:    { id:'mine_spider',    name:'Giant Spider',    img:A+'characters/Monsters/Monster_Spider.PNG',                hp:35, atk:6, def:1, xp:30, gold:[0,4],   loot:[['herbs_poison',0.2]] },
+  mine_zombie:    { id:'mine_zombie',    name:'Shambling Zombie',img:A+'characters/Monsters/Undead/Undead_06_zombie.PNG',       hp:45, atk:8, def:3, xp:40, gold:[0,8],   loot:[['rune_stone',0.05]] },
+  skeleton:       { id:'skeleton',       name:'Skeleton',        img:A+'characters/Monsters/Undead/Undead_05_skeleton.PNG',     hp:30, atk:7, def:1, xp:30, gold:[0,5],   loot:[['iron_bar',0.2]] },
+  skel_archer:    { id:'skel_archer',    name:'Skeleton Archer', img:A+'characters/Monsters/Undead/Undead_01_archer.PNG',       hp:28, atk:9, def:1, xp:35, gold:[0,6],   loot:[['bow_01',0.1]] },
+  lich_cultist:   { id:'lich_cultist',   name:'Lich Cultist',    img:A+'characters/Monsters/Undead/Undead_07_soulhunter.PNG',   hp:60, atk:12,def:4, xp:80, gold:[10,25], loot:[['fire_scroll',0.25],['rune_stone',0.15]] },
+  risen_foreman:  { id:'risen_foreman',  name:'Risen Foreman',   img:A+'characters/Monsters/Undead/Undead_04_warrior.PNG',      hp:120,atk:14,def:6, xp:200,gold:[20,50], loot:[['mine_key',1.0],['sword_10',0.2],['heal_md',0.5]], boss:true },
+  goblin_chief:   { id:'goblin_chief',   name:'Goblin Chief',    img:A+'characters/Goblin/Goblin Males/goblin_02.PNG',          hp:80, atk:10,def:3, xp:120,gold:[15,35], loot:[['axe_01',0.3],['heal_md',0.2]], boss:true },
+  dark_elf:       { id:'dark_elf',       name:'Dark Elf Wraith', img:A+'characters/ELF/Men_ELF/Elf_03.PNG',                    hp:55, atk:11,def:3, xp:65, gold:[8,20],  loot:[['rune_stone',0.2],['magic_dust',0.2]] },
+};
+
+// ============================================================
+// NPC DATABASE
+// ============================================================
+const NPCS = {
+  edric: { id:'edric', name:'Mayor Edric Thornwall', img:A+'characters/Human/Men_Human/Duke.PNG', scene:'ashford_square', x:0.62, y:0.45,
+    dialogue:{ default:["The Rift grows wider every week. We need brave souls.", "Speak to Captain Penn about the goblin raids to the north.", "Clear the Salt Mines of the risen dead — you'll be well compensated."], quest_mines_done:["You've done Ashford a great service. Take this reward."] },
+    quests:['clear_salt_mines'] },
+
+  aleva: { id:'aleva', name:'Aleva Brightwick', img:A+'characters/Human/Women_Human/Old_woman.PNG', scene:'ashford_inn', x:0.45, y:0.5,
+    dialogue:{ default:["Welcome to the Bright Hearth! Rest costs 10 gold, heals you fully.", "Heard strange lights near the Salt Mines last night.", "Old Blind Tom knows more than he lets on, I'll tell you that."] },
+    shop:'inn_shop', service:'rest' },
+
+  dorvak: { id:'dorvak', name:'Dorvak the Smith', img:A+'characters/Human/Men_Human/researcher.PNG', scene:'ashford_forge', x:0.55, y:0.5,
+    dialogue:{ default:["Good steel, fair coin. What'll it be?", "Bring me iron bars and I can forge something decent.", "The goblins stole three sword blanks last month. I'm still angry about it."] },
+    shop:'forge_shop' },
+
+  mirela: { id:'mirela', name:'Sister Mirela', img:A+'characters/Human/Women_Human/Witch.PNG', scene:'ashford_temple', x:0.5, y:0.4,
+    dialogue:{ default:["Helios lights our path. May His grace protect you.", "The undead stir near Calidar's ruins. Do not travel there at night.", "I can heal your wounds for a tithe to the temple — 20 gold."] },
+    shop:'temple_shop', service:'heal' },
+
+  blind_tom: { id:'blind_tom', name:'Blind Tom', img:A+'characters/Human/Men_Human/Leper.PNG', scene:'ashford_square', x:0.28, y:0.6,
+    dialogue:{ default:["*sniffs* You smell of iron and bad decisions.", "They say Goblin Snix at the Haven trades in things the Dominion would burn you for.", "There's a cellar under the Inn. Aleva doesn't like people knowing about it.", "The Curator in the ruins pays good coin for ancient elven relics."] } },
+
+  penn: { id:'penn', name:'Guard Captain Penn', img:A+'characters/Human/Men_Human/Guard.PNG', scene:'ashford_square', x:0.78, y:0.42,
+    dialogue:{ default:["Keep the peace or answer to me.", "Three raids this month. Goblins from the northern warrens.", "Carrying cursed or illegal goods in Ashford will get you arrested."], wanted:["You're a wanted criminal. Drop your weapons — NOW."] },
+    hostile_if_wanted:true },
+
+  kerris: { id:'kerris', name:'Kerris (Fence)', img:A+'characters/Human/Men_Human/Robber.PNG', scene:'ashford_cellar', x:0.5, y:0.5,
+    dialogue:{ default:["Keep your voice down, would you?", "I don't ask where things come from. Same courtesy expected in return.", "Poison, scrolls, stolen goods — I've got what the temple won't sell."] },
+    shop:'black_market', hidden:true },
+
+  urgak: { id:'urgak', name:'Foreman Urgak', img:A+'characters/Human/Men_Human/Human_28_thug.PNG', scene:'mines_entrance', x:0.5, y:0.52,
+    dialogue:{ default:["Work's stopped. Three men dead, something's in the tunnels.", "I dropped the mine key fleeing from... whatever those things are.", "Clear those tunnels and the key's yours to sell back to me for 75 gold."] },
+    quests:['find_mine_key'] },
+
+  snix: { id:'snix', name:'Snix the Trader', img:A+'characters/Goblin/Goblin Males/goblin_01.PNG', scene:'goblin_haven', x:0.4, y:0.52,
+    dialogue:{ default:["Snix has the best goods! Very quality! Not stolen!", "No questions, yes? Snix not ask where you got it.", "You want poison? Shadow scrolls? Snix can arrange."] },
+    shop:'goblin_shop' },
+
+  krix: { id:'krix', name:'Krix the Wise', img:A+'characters/Goblin/Goblin Males/goblin_02.PNG', scene:'goblin_haven', x:0.62, y:0.52,
+    dialogue:{ default:["Krix sees things in the Rift-glow. Not good things.", "You want to learn fire-calling? Krix teaches. Small price.", "Rift grows. All creatures feel it. Even goblins."] },
+    teaches:['fire_scroll'] },
+
+  shade: { id:'shade', name:'Shade', img:A+'characters/ELF/Men_ELF/Elf_04_hunter.PNG', scene:'calidar_ruins', x:0.45, y:0.45,
+    dialogue:{ default:["What do you want, human?", "Calidar fell. We endured. That is all.", "The Dominion would see us all burned. Don't lead them here."] },
+    shop:'elf_shop' },
+
+  curator: { id:'curator', name:'The Curator', img:A+'characters/Human/Men_Human/researcher.PNG', scene:'calidar_ruins', x:0.62, y:0.48,
+    dialogue:{ default:["Remarkable — the stonework predates the Atlas detonation by four centuries!", "Those rune fragments? Worth more to a scholar than any swordsman.", "The lower halls are dangerous. The undead there still remember being elven."] },
+    quests:['recover_relic'] },
+
+  inquisitor: { id:'inquisitor', name:'Inquisitor Voss', img:A+'characters/Human/Men_Human/OldCultist.PNG', scene:'rift_outpost', x:0.5, y:0.45,
+    dialogue:{ default:["The Rift is a heresy made manifest. We will close it.", "Anyone trading with the undead is an enemy of Helios.", "You... you carry a Rift Shard? Hand it over immediately."] },
+    faction:'dominion' },
+};
+
+// ============================================================
+// SHOPS
+// ============================================================
+const SHOPS = {
+  forge_shop:  { name:"Dorvak's Forge",  stock:['sword_01','sword_10','axe_01','dagger_01','bow_01','iron_helm','gambeson','mail_chest','leather_boots','iron_bar','coal'], buys:true },
+  inn_shop:    { name:"Bright Hearth",   stock:['bread','steak','beer','heal_sm','heal_md'], buys:false },
+  temple_shop: { name:"Temple of Helios",stock:['heal_sm','heal_md','heal_lg','mana_sm','sleep_scroll'], buys:false },
+  goblin_shop: { name:"Snix's Stall",    stock:['dagger_01','herbs_heal','heal_sm','poison_vial','herbs_poison','leather_mat','rune_stone'], buys:true, illegal:true },
+  black_market:{ name:"Kerris's Cellar", stock:['poison_vial','herbs_poison','enchant_scroll','magic_dust','rune_stone','fire_scroll'], buys:true, illegal:true },
+  elf_shop:    { name:"Shade's Cache",   stock:['rune_stone','magic_dust','fire_scroll','sleep_scroll','mana_sm','wand','staff_1'], buys:true },
+};
+
+// ============================================================
+// SCENES
+// ============================================================
+const SCENES = {
+  world_map: {
+    id:'world_map', name:'Island of Fortuna',
+    bg:'#0d1a0d', bgType:'gradient',
+    bgColors:['#0d2010','#0a150a'],
+    npcs:[],
+    exits:[
+      {label:'Ashford',      x:0.30, y:0.48, to:'ashford_square', desc:'A walled market town'},
+      {label:'Salt Mines',   x:0.55, y:0.32, to:'mines_entrance',  desc:'Abandoned mines'},
+      {label:'Goblin Haven', x:0.72, y:0.62, to:'goblin_haven',    desc:'Goblin trading camp'},
+      {label:'Calidar Ruins',x:0.18, y:0.67, to:'calidar_ruins',   desc:'Ruined elven city'},
+      {label:'Rift Outpost', x:0.82, y:0.22, to:'rift_outpost',    desc:'Dominion military camp', requires:'flag:mines_cleared'},
+    ],
+    music: A+'music/05_Misty_Lands_ExplorationTrack.WAV',
+    desc:'The island of Fortuna. The Rift glows on the northern horizon.',
+  },
+  ashford_square: {
+    id:'ashford_square', name:'Ashford — Town Square',
+    bg:'#8B7355', bgImg: null,
+    npcs:['edric','blind_tom','penn'],
+    exits:[
+      {label:'⬅ World Map', x:0.06, y:0.08, to:'world_map'},
+      {label:'Inn →',       x:0.88, y:0.25, to:'ashford_inn'},
+      {label:'Forge →',     x:0.88, y:0.50, to:'ashford_forge'},
+      {label:'Temple →',    x:0.88, y:0.75, to:'ashford_temple'},
+    ],
+    music: A+'music/SW_Town_1.WAV',
+    desc:'The central square of Ashford. A stone well stands at the centre. Market stalls flank the lanes.',
+  },
+  ashford_inn: {
+    id:'ashford_inn', name:'Bright Hearth Inn',
+    bg:'#3d2210', npcs:['aleva'],
+    exits:[{label:'⬅ Square', x:0.06, y:0.08, to:'ashford_square'}],
+    music: A+'music/SW_Town_1.WAV',
+    desc:'A warm inn, smelling of roasted meat and pine smoke. Firelight flickers on the walls.',
+    has_cellar: true,
+  },
+  ashford_forge: {
+    id:'ashford_forge', name:"Dorvak's Forge",
+    bg:'#2a1a0a', bgImg: A+'Explore/ForgeBackgroundart.png',
+    npcs:['dorvak'],
+    exits:[{label:'⬅ Square', x:0.06, y:0.08, to:'ashford_square'}],
+    music: A+'music/SW_Town_1.WAV',
+    desc:'Heat radiates from the forge. The ring of hammer on steel fills the air.',
+  },
+  ashford_temple: {
+    id:'ashford_temple', name:'Temple of Helios',
+    bg:'#c8b870', npcs:['mirela'],
+    exits:[{label:'⬅ Square', x:0.06, y:0.08, to:'ashford_square'}],
+    music: A+'music/SW_Town_1.WAV',
+    desc:'White stone columns and incense smoke. A golden sunburst dominates the altar.',
+  },
+  ashford_cellar: {
+    id:'ashford_cellar', name:'Inn Cellar — Black Market',
+    bg:'#080810', npcs:['kerris'],
+    exits:[{label:'↑ Back up', x:0.06, y:0.08, to:'ashford_inn'}],
+    hidden:true,
+    desc:'A damp cellar lit by a single lantern. Crates of questionable goods line the walls.',
+  },
+  mines_entrance: {
+    id:'mines_entrance', name:'Salt Mines — Entrance',
+    bg:'#303030', npcs:['urgak'],
+    exits:[
+      {label:'⬅ World Map',  x:0.06, y:0.08, to:'world_map'},
+      {label:'Enter Mines →',x:0.88, y:0.50, to:'mines_l1'},
+    ],
+    encounter_chance:0.5, encounter_pool:['goblin_scout','goblin_scout'],
+    music: A+'music/09_The_Journey_Begins__ExplorationTrack.WAV',
+    desc:'A rough-hewn opening in the cliffside. Cart tracks lead into darkness.',
+  },
+  mines_l1: {
+    id:'mines_l1', name:'Salt Mines — Level 1',
+    bg:'#1a1a28', npcs:[],
+    exits:[
+      {label:'⬅ Exit',    x:0.06, y:0.08, to:'mines_entrance'},
+      {label:'Deeper ↓',  x:0.88, y:0.50, to:'mines_l2'},
+    ],
+    encounter_chance:0.75, encounter_pool:['mine_spider','mine_zombie','skeleton'],
+    loot_pool:[['heal_sm',0.7],['iron_bar',0.6],['leather_mat',0.5],['herbs_heal',0.4]],
+    music: A+'music/01_Horns_Of_War_BattleTrack.WAV',
+    desc:'Narrow tunnels lit by guttering torches. Cobwebs fill every corner. Something moves in the dark.',
+  },
+  mines_l2: {
+    id:'mines_l2', name:'Salt Mines — Deep Level',
+    bg:'#100a1a', npcs:[],
+    exits:[{label:'⬅ Back', x:0.06, y:0.08, to:'mines_l1'}],
+    encounter_chance:0.9, encounter_pool:['skel_archer','lich_cultist','mine_zombie'],
+    boss_encounter:'risen_foreman', boss_flag:'risen_foreman_dead',
+    loot_pool:[['rune_stone',0.6],['magic_dust',0.4],['rift_shard',0.3],['heal_md',0.5],['silver_bar',0.5]],
+    music: A+'music/01_Horns_Of_War_BattleTrack.WAV',
+    desc:'The deepest level. Ancient salt crystals glow faintly blue. A figure lurches from the shadows.',
+  },
+  goblin_haven: {
+    id:'goblin_haven', name:'Goblin Haven',
+    bg:'#2a4015', npcs:['snix','krix'],
+    exits:[
+      {label:'⬅ World Map', x:0.06, y:0.08, to:'world_map'},
+      {label:'Warchiefs Hall →', x:0.88, y:0.50, to:'goblin_hall'},
+    ],
+    encounter_chance:0.15, encounter_pool:['goblin_scout','goblin_warrior'],
+    music: A+'music/SW_Exploration_6.WAV',
+    desc:'A chaotic camp of tents and stolen goods. Goblins chatter and haggle by firelight.',
+  },
+  goblin_hall: {
+    id:'goblin_hall', name:"Goblin Warchief's Hall",
+    bg:'#1a2a0a', npcs:[],
+    exits:[{label:'⬅ Haven', x:0.06, y:0.08, to:'goblin_haven'}],
+    boss_encounter:'goblin_chief', boss_flag:'goblin_chief_dead',
+    encounter_chance:1.0, encounter_pool:['goblin_warrior','goblin_warrior'],
+    loot_pool:[['gold_coins_big',1.0],['axe_01',0.4],['heal_md',0.3]],
+    music: A+'music/01_Horns_Of_War_BattleTrack.WAV',
+    desc:"A large tent decorated with trophies. The Goblin Chief sits on a throne of crates.",
+  },
+  calidar_ruins: {
+    id:'calidar_ruins', name:'Calidar Ruins',
+    bg:'#1a2535', npcs:['shade','curator'],
+    exits:[
+      {label:'⬅ World Map',   x:0.06, y:0.08, to:'world_map'},
+      {label:'Catacombs ↓',   x:0.88, y:0.50, to:'catacombs'},
+    ],
+    encounter_chance:0.4, encounter_pool:['skeleton','dark_elf'],
+    music: A+'music/07_Mountain_Halls__ExplorationTrack.WAV',
+    desc:'Crumbling elven spires claw at a grey sky. Ancient runes pulse faintly on the stonework.',
+  },
+  catacombs: {
+    id:'catacombs', name:'Calidar Catacombs',
+    bg:'#0a0515', npcs:[],
+    exits:[{label:'⬅ Ruins', x:0.06, y:0.08, to:'calidar_ruins'}],
+    encounter_chance:0.9, encounter_pool:['mine_zombie','skel_archer','dark_elf','lich_cultist'],
+    loot_pool:[['rune_stone',0.7],['magic_dust',0.5],['elf_relic',0.4],['fire_scroll',0.3]],
+    music: A+'music/01_Horns_Of_War_BattleTrack.WAV',
+    desc:'Ancient elven burial halls stretch into darkness. The dead do not sleep here.',
+  },
+  rift_outpost: {
+    id:'rift_outpost', name:'Rift Outpost',
+    bg:'#1a1a3a', npcs:['inquisitor'],
+    exits:[{label:'⬅ World Map', x:0.06, y:0.08, to:'world_map'}],
+    requires:'flag:mines_cleared',
+    music: A+'music/SW_Town_1.WAV',
+    desc:'A Dominion military camp at the edge of the Rift tear. Purple light pulses on the horizon.',
+  },
+};
+
+// ============================================================
+// QUESTS
+// ============================================================
+const QUESTS = {
+  clear_salt_mines: {
+    id:'clear_salt_mines', name:'The Risen Dead',
+    giver:'edric', desc:'Clear the undead from the Salt Mines.',
+    objectives:[
+      {type:'kill', target:'mine_zombie', count:3, current:0, label:'Kill 3 Zombies (0/3)'},
+      {type:'kill', target:'risen_foreman', count:1, current:0, label:'Defeat the Risen Foreman (0/1)'},
+    ],
+    reward:{ gold:150, xp:200, items:['heal_md'] }, complete_flag:'mines_cleared',
+  },
+  find_mine_key: {
+    id:'find_mine_key', name:"Foreman's Key",
+    giver:'urgak', desc:'Recover the mine key from the depths.',
+    objectives:[{type:'item', target:'mine_key', count:1, current:0, label:'Find the Mine Key (0/1)'}],
+    reward:{ gold:75, xp:100 }, complete_flag:'mine_key_found',
+  },
+  recover_relic: {
+    id:'recover_relic', name:'The Elven Relic',
+    giver:'curator', desc:'Retrieve an ancient elven relic from the Catacombs.',
+    objectives:[{type:'item', target:'elf_relic', count:1, current:0, label:'Find Elven Relic (0/1)'}],
+    reward:{ gold:100, xp:150, items:['fire_scroll','mana_sm'] }, complete_flag:'relic_found',
+  },
+};
+
+// ============================================================
+// GAME STATE
+// ============================================================
+const GS = {
+  scene:'world_map',
+  player:{
+    name:'Adventurer', level:1, xp:0, xpNext:100,
+    hp:100, maxHp:100, mp:50, maxMp:50, gold:50,
+    str:8, dex:8, intl:8, con:8,
+    equip:{ weapon:null, chest:null, helm:null, boots:null, ring:null },
+    inventory:[ // starting items
+      {id:'sword_01', qty:1},
+      {id:'heal_sm',  qty:2},
+      {id:'bread',    qty:3},
+    ],
+    skills:['attack','defend'],
+    scrolls:[],
+  },
+  activeQuests:[], completedQuests:[],
+  flags:{}, wantedLevel:0,
+  currentTab:'inv',
+  sceneLooted:{},
+};
+
+// ============================================================
+// HELPERS
+// ============================================================
+function rnd(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function d20(){ return rnd(1,20); }
+function roll(dice,sides,bonus=0){ let t=0;for(let i=0;i<dice;i++)t+=rnd(1,sides);return t+bonus; }
+
+function log(msg, cls=''){
+  const div = document.createElement('div');
+  div.className = 'log-line ' + cls;
+  div.textContent = msg;
+  const l = document.getElementById('log');
+  l.appendChild(div);
+  l.scrollTop = l.scrollHeight;
+}
+
+function getEquippedItem(slot){
+  const id = GS.player.equip[slot];
+  return id ? ITEMS[id] : null;
+}
+
+function playerAtk(){
+  const w = getEquippedItem('weapon');
+  return (w ? w.atk : 2) + Math.floor((GS.player.str - 8) / 2);
+}
+function playerDef(){
+  let d = Math.floor((GS.player.con - 8) / 2);
+  for(const slot of ['chest','helm','boots']){
+    const it = getEquippedItem(slot);
+    if(it) d += it.def || 0;
+  }
+  return d;
+}
+
+function hasItem(id){ return GS.player.inventory.some(x=>x.id===id&&x.qty>0); }
+function removeItem(id,qty=1){
+  const slot = GS.player.inventory.find(x=>x.id===id);
+  if(slot){ slot.qty -= qty; if(slot.qty<=0) GS.player.inventory = GS.player.inventory.filter(x=>x.id!==id); }
+}
+function addItem(id,qty=1){
+  const slot = GS.player.inventory.find(x=>x.id===id);
+  if(slot) slot.qty += qty;
+  else GS.player.inventory.push({id, qty});
+  log('+ Got: ' + ITEMS[id]?.name + (qty>1?' x'+qty:''), 'loot');
+}
+function addGold(n){ GS.player.gold += n; if(n>0) log('+ '+n+' gold', 'loot'); updateStats(); }
+function addXP(n){
+  GS.player.xp += n;
+  log('+ '+n+' XP', 'info');
+  while(GS.player.xp >= GS.player.xpNext){ levelUp(); }
+  updateStats();
+}
+function levelUp(){
+  GS.player.xp -= GS.player.xpNext;
+  GS.player.level++;
+  GS.player.xpNext = Math.floor(GS.player.xpNext * 1.5);
+  GS.player.maxHp += 15; GS.player.hp = GS.player.maxHp;
+  GS.player.maxMp += 8;  GS.player.mp = GS.player.maxMp;
+  GS.player.str++; GS.player.dex++; GS.player.intl++;
+  log('★ LEVEL UP! Now level ' + GS.player.level, 'info');
+}
+function updateStats(){
+  const p = GS.player;
+  document.getElementById('s-hp').textContent    = 'HP: '+p.hp+'/'+p.maxHp;
+  document.getElementById('s-mp').textContent    = 'MP: '+p.mp+'/'+p.maxMp;
+  document.getElementById('s-gold').textContent  = 'Gold: '+p.gold;
+  document.getElementById('s-xp').textContent    = 'XP: '+p.xp+'/'+p.xpNext;
+  document.getElementById('s-level').textContent = 'Lv.'+p.level;
+  const w = document.getElementById('s-wanted');
+  w.style.display = GS.wantedLevel > 0 ? 'inline' : 'none';
+}
+
+// ============================================================
+// SCENE RENDERING
+// ============================================================
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas(){
+  const area = document.getElementById('game-area');
+  canvas.width  = area.clientWidth;
+  canvas.height = area.clientHeight;
+  renderScene();
+}
+window.addEventListener('resize', resizeCanvas);
+
+function renderScene(){
+  const scene = SCENES[GS.scene];
+  if(!scene) return;
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  // Background
+  if(GS.scene === 'world_map'){
+    drawWorldMap(W, H);
+  } else {
+    // Solid bg color
+    ctx.fillStyle = scene.bg || '#1a1520';
+    ctx.fillRect(0,0,W,H);
+    // Scene description band at bottom of canvas
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(0, H-50, W, 50);
+    ctx.fillStyle = '#8a7a5a';
+    ctx.font = '12px Georgia';
+    ctx.fillText(scene.desc || '', 10, H-20, W-20);
+  }
+
+  // Scene name top-left
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0,0,W,30);
+  ctx.fillStyle = '#c8a84b';
+  ctx.font = 'bold 14px Georgia';
+  ctx.fillText(scene.name, 10, 20);
+
+  // Exit buttons (rendered as canvas text rects)
+  for(const ex of (scene.exits||[])){
+    if(ex.requires && !checkRequires(ex.requires)) continue;
+    const x = ex.x*W, y = ex.y*H;
+    ctx.fillStyle = 'rgba(20,15,30,0.85)';
+    ctx.strokeStyle = '#5a4a2a';
+    ctx.lineWidth = 1;
+    const tw = ctx.measureText(ex.label).width + 20;
+    ctx.fillRect(x-tw/2, y-14, tw, 26);
+    ctx.strokeRect(x-tw/2, y-14, tw, 26);
+    ctx.fillStyle = '#c8a84b';
+    ctx.font = '12px Georgia';
+    ctx.fillText(ex.label, x - ctx.measureText(ex.label).width/2, y+4);
+  }
+
+  // World map: draw location markers under the exit labels
+  if(GS.scene === 'world_map'){
+    ctx.font = '12px Georgia';
+    for(const ex of (scene.exits||[])){
+      if(ex.requires && !checkRequires(ex.requires)) continue;
+      const x = ex.x*W, y = ex.y*H;
+      ctx.fillStyle = '#7ac87a';
+      ctx.beginPath(); ctx.arc(x, y-30, 8, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = '#c8a84b'; ctx.lineWidth=1; ctx.stroke();
+    }
+  }
+
+  // Loot button if scene has loot
+  if(SCENES[GS.scene].loot_pool && !GS.sceneLooted[GS.scene+'_looted']){
+    const lx = W*0.5, ly = H*0.75;
+    ctx.fillStyle = 'rgba(40,30,10,0.9)';
+    ctx.strokeStyle = '#c8a84b'; ctx.lineWidth=1;
+    ctx.fillRect(lx-50, ly-14, 100, 26);
+    ctx.strokeRect(lx-50, ly-14, 100, 26);
+    ctx.fillStyle = '#c8a84b'; ctx.font='12px Georgia';
+    ctx.fillText('🎁 Search Area', lx-48, ly+4);
+  }
+
+  renderNPCs();
+}
+
+function drawWorldMap(W, H){
+  // Gradient island background
+  const grd = ctx.createRadialGradient(W/2,H/2,20,W/2,H/2,W/2);
+  grd.addColorStop(0,'#1a3a15');
+  grd.addColorStop(0.5,'#0d2010');
+  grd.addColorStop(1,'#08100a');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0,0,W,H);
+  // Ocean border
+  ctx.strokeStyle = '#0a3060';
+  ctx.lineWidth = 40;
+  ctx.strokeRect(0,0,W,H);
+  // Island shape
+  ctx.fillStyle = '#1a4015';
+  ctx.beginPath();
+  ctx.ellipse(W*0.45, H*0.52, W*0.38, H*0.42, 0, 0, Math.PI*2);
+  ctx.fill();
+  // Roads
+  ctx.strokeStyle = '#3a3020'; ctx.lineWidth = 3; ctx.setLineDash([6,4]);
+  ctx.beginPath(); ctx.moveTo(W*0.3,H*0.48); ctx.lineTo(W*0.55,H*0.32); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W*0.3,H*0.48); ctx.lineTo(W*0.72,H*0.62); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W*0.3,H*0.48); ctx.lineTo(W*0.18,H*0.67); ctx.stroke();
+  ctx.setLineDash([]);
+  // Title
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0,0,W,36);
+  ctx.fillStyle = '#c8a84b'; ctx.font = 'bold 16px Georgia';
+  ctx.fillText('Island of Fortuna — Year 500 Post-Atlas', 10, 22);
+  ctx.fillStyle = '#6a6080'; ctx.font = '11px Georgia';
+  ctx.fillText('The Rift glows on the northern horizon.', 10, H-8);
+}
+
+function renderNPCs(){
+  const layer = document.getElementById('npc-layer');
+  layer.innerHTML = '';
+  const scene = SCENES[GS.scene];
+  if(!scene) return;
+  const W = canvas.width, H = canvas.height;
+
+  for(const npcId of (scene.npcs||[])){
+    const npc = NPCS[npcId];
+    if(!npc) continue;
+    const el = document.createElement('div');
+    el.className = 'npc-sprite';
+    el.style.left = (npc.x * W) + 'px';
+    el.style.top  = (npc.y * H) + 'px';
+    const img = document.createElement('img');
+    img.src = npc.img;
+    img.onerror = ()=>{ img.style.background='#2a2020'; };
+    const label = document.createElement('div');
+    label.className = 'npc-label';
+    label.textContent = npc.name;
+    el.appendChild(img);
+    el.appendChild(label);
+    el.addEventListener('click', ()=>{ openNPCDialogue(npcId); });
+    layer.appendChild(el);
+  }
+}
+
+// ============================================================
+// CANVAS CLICK HANDLER
+// ============================================================
+canvas.addEventListener('click', e=>{
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const my = (e.clientY - rect.top)  * (canvas.height / rect.height);
+  const scene = SCENES[GS.scene];
+  const W = canvas.width, H = canvas.height;
+
+  // Check exits
+  for(const ex of (scene.exits||[])){
+    if(ex.requires && !checkRequires(ex.requires)) continue;
+    const x = ex.x*W, y = ex.y*H;
+    const tw = 80;
+    if(Math.abs(mx-x)<tw && Math.abs(my-y)<18){
+      travelTo(ex.to);
+      return;
+    }
+  }
+
+  // Check loot button
+  if(scene.loot_pool && !GS.sceneLooted[GS.scene+'_looted']){
+    const lx = W*0.5, ly = H*0.75;
+    if(Math.abs(mx-lx)<60 && Math.abs(my-ly)<16){
+      lootArea();
+      return;
+    }
+  }
+});
+
+function checkRequires(req){
+  if(!req) return true;
+  if(req.startsWith('flag:')) return !!GS.flags[req.slice(5)];
+  if(req.startsWith('item:')) return hasItem(req.slice(5));
+  return true;
+}
+
+// ============================================================
+// TRAVEL
+// ============================================================
+let currentAudio = null;
+function travelTo(sceneId){
+  const scene = SCENES[sceneId];
+  if(!scene){ log('Cannot go there.','warn'); return; }
+  if(scene.requires && !checkRequires(scene.requires)){ log('The way is not yet open.','warn'); return; }
+
+  GS.scene = sceneId;
+  log('→ ' + scene.name, 'info');
+
+  // Random encounter check
+  const hasEnc = scene.encounter_chance && Math.random() < scene.encounter_chance;
+  const hasBoss = scene.boss_encounter && !GS.flags[scene.boss_flag];
+
+  if(hasBoss){
+    setTimeout(()=>{ startCombat(scene.boss_encounter); }, 300);
+  } else if(hasEnc && scene.encounter_pool && scene.encounter_pool.length){
+    const pool = scene.encounter_pool;
+    const eid  = pool[rnd(0, pool.length-1)];
+    setTimeout(()=>{ startCombat(eid); }, 300);
+  }
+
+  // Music
+  if(scene.music && scene.music !== (currentAudio?.src||'')){
+    if(currentAudio){ currentAudio.pause(); }
+    currentAudio = new Audio(scene.music);
+    currentAudio.loop = true;
+    currentAudio.volume = 0.35;
+    currentAudio.play().catch(()=>{});
+  }
+
+  renderScene();
+  renderSidebar();
+}
+
+function lootArea(){
+  const scene = SCENES[GS.scene];
+  GS.sceneLooted[GS.scene+'_looted'] = true;
+  log('You search the area...', 'info');
+  let found = false;
+  for(const [id,chance] of scene.loot_pool){
+    if(Math.random() < chance && ITEMS[id]){
+      addItem(id, 1);
+      found = true;
+    }
+  }
+  if(!found) log('Nothing of value here.', 'warn');
+  renderScene();
+  renderSidebar();
+}
+
+// ============================================================
+// DIALOGUE SYSTEM
+// ============================================================
+function openNPCDialogue(npcId){
+  const npc = NPCS[npcId];
+  if(!npc) return;
+
+  // Hostile if wanted
+  if(npc.hostile_if_wanted && GS.wantedLevel > 0){
+    const lines = npc.dialogue.wanted || ["You're under arrest!"];
+    showDialogue(npc, lines[0], [
+      {label:'Fight!',  action:()=>{ closeOverlay(); startCombat('guard_captain'); }},
+      {label:'Flee',    action:()=>{ closeOverlay(); travelTo('world_map'); }},
+    ]);
+    return;
+  }
+
+  const lines = npc.dialogue.default || [];
+  const line  = lines[rnd(0, lines.length-1)] || '...';
+  const opts  = [];
+
+  if(npc.shop)    opts.push({label:'Browse goods',   action:()=>{ closeOverlay(); openShop(npc.shop, npc.name); }});
+  if(npc.service === 'rest') opts.push({label:'Rest (10g)',     action:()=>{ closeOverlay(); serviceRest(); }});
+  if(npc.service === 'heal') opts.push({label:'Heal me (20g)',  action:()=>{ closeOverlay(); serviceHeal(); }});
+  if(npc.teaches) opts.push({label:'Learn a skill',  action:()=>{ closeOverlay(); openTeaching(npcId); }});
+  if(npc.quests)  for(const qid of npc.quests) opts.push({label:'About work…',  action:()=>{ closeOverlay(); openQuestOffer(qid, npcId); }});
+
+  if(GS.scene === 'ashford_inn'){
+    opts.push({label:'Check the cellar?',
+      action:()=>{ closeOverlay(); log('You find a hidden door behind a shelf.','info'); travelTo('ashford_cellar'); }});
+  }
+
+  opts.push({label:'Leave', action:closeOverlay});
+  showDialogue(npc, line, opts);
+}
+
+function showDialogue(npc, text, options){
+  const box = document.getElementById('overlay-box');
+  box.innerHTML = `<h2>${npc.name}</h2>
+    <div class="dlg-portrait">
+      <img src="${npc.img}" onerror="this.style.background='#2a2020'">
+      <div class="dlg-text">${text}</div>
+    </div>
+    <div class="dlg-options"></div>`;
+  const opts = box.querySelector('.dlg-options');
+  for(const o of options){
+    const btn = document.createElement('button');
+    btn.className = 'dlg-btn'; btn.textContent = o.label;
+    btn.onclick = o.action;
+    opts.appendChild(btn);
+  }
+  document.getElementById('overlay').classList.add('active');
+}
+
+function closeOverlay(){
+  document.getElementById('overlay').classList.remove('active');
+}
+
+function serviceRest(){
+  if(GS.player.gold < 10){ log('Not enough gold to rest.','warn'); return; }
+  GS.player.gold -= 10;
+  GS.player.hp = GS.player.maxHp;
+  GS.player.mp = GS.player.maxMp;
+  log('You rest and recover fully. (-10g)', 'info');
+  updateStats();
+}
+function serviceHeal(){
+  if(GS.player.gold < 20){ log('Not enough gold for healing.','warn'); return; }
+  GS.player.gold -= 20;
+  GS.player.hp = GS.player.maxHp;
+  log("Sister Mirela's light heals your wounds. (-20g)", 'info');
+  updateStats();
+}
+
+function openQuestOffer(qid, npcId){
+  const q = QUESTS[qid]; if(!q) return;
+  if(GS.completedQuests.includes(qid)){ log('Quest already completed.','info'); return; }
+  if(GS.activeQuests.some(x=>x.id===qid)){ log('Already on this quest.','info'); return; }
+  const npc = NPCS[npcId];
+  showDialogue(npc, q.desc + '\n\nReward: '+q.reward.gold+'g, '+q.reward.xp+' XP', [
+    {label:'Accept quest', action:()=>{ GS.activeQuests.push(JSON.parse(JSON.stringify(q))); log('Quest accepted: '+q.name,'info'); closeOverlay(); renderSidebar(); }},
+    {label:'Not now',      action:closeOverlay},
+  ]);
+}
+
+function openTeaching(npcId){
+  const npc = NPCS[npcId];
+  const opts = [];
+  for(const tid of (npc.teaches||[])){
+    const it = ITEMS[tid];
+    if(!it) continue;
+    const cost = it.val * 2;
+    opts.push({label:`Learn ${it.name} (${cost}g)`, action:()=>{
+      if(GS.player.gold < cost){ log('Not enough gold.','warn'); closeOverlay(); return; }
+      GS.player.gold -= cost;
+      addItem(tid, 1);
+      log('Learned: '+it.name,'info');
+      closeOverlay(); renderSidebar();
+    }});
+  }
+  opts.push({label:'Not today', action:closeOverlay});
+  showDialogue(npc, 'What would you like to learn?', opts);
+}
+
+// ============================================================
+// SHOP SYSTEM
+// ============================================================
+function openShop(shopId, shopNpcName){
+  const shop = SHOPS[shopId]; if(!shop) return;
+  const box = document.getElementById('overlay-box');
+  box.innerHTML = `<h2>🛒 ${shop.name}</h2><div style="color:#8a7a5a;font-size:11px;margin-bottom:8px;">Your gold: <span id="shop-gold" style="color:#c8a84b">${GS.player.gold}</span></div>
+    <div id="shop-list"></div>
+    ${shop.buys ? '<hr style="border-color:#2a2035;margin:8px 0"><h3 style="font-size:13px;color:#8a7a5a">Sell items</h3><div id="sell-list"></div>' : ''}
+    <button class="dlg-btn" style="margin-top:10px" onclick="closeOverlay()">Leave shop</button>`;
+  renderShopList(shop, box);
+  document.getElementById('overlay').classList.add('active');
+}
+
+function renderShopList(shop, box){
+  const sl = box.querySelector('#shop-list');
+  sl.innerHTML='';
+  for(const iid of shop.stock){
+    const item = ITEMS[iid]; if(!item) continue;
+    const row = document.createElement('div');
+    row.className = 'shop-item';
+    const price = Math.round(item.val * 1.2);
+    row.innerHTML = `<img src="${item.img}" onerror="this.style.background='#1a1520'">
+      <div class="sname">${item.name}${item.illegal?'<span style="color:#e05a5a;font-size:10px"> [ILLEGAL]</span>':''}</div>
+      <div class="sprice">${price}g</div>
+      <button class="shop-btn" onclick="buyItem('${iid}',${price})">Buy</button>`;
+    sl.appendChild(row);
+  }
+  if(shop.buys){
+    const sell = box.querySelector('#sell-list');
+    if(sell){
+      sell.innerHTML='';
+      for(const slot of GS.player.inventory){
+        const item = ITEMS[slot.id]; if(!item || item.val===0) continue;
+        const sp = Math.round(item.val*0.6);
+        const row = document.createElement('div');
+        row.className = 'shop-item';
+        row.innerHTML=`<img src="${item.img}" onerror="this.style.background='#1a1520'">
+          <div class="sname">${item.name} (x${slot.qty})</div>
+          <div class="sprice">${sp}g</div>
+          <button class="shop-btn" onclick="sellItem('${slot.id}',${sp})">Sell</button>`;
+        sell.appendChild(row);
+      }
+    }
+  }
+}
+
+function buyItem(iid, price){
+  const item = ITEMS[iid]; if(!item) return;
+  if(GS.player.gold < price){ log('Not enough gold.','warn'); return; }
+  // Crime check for illegal items
+  if(item.illegal){
+    const witnesses = hasNearbyAuthority();
+    if(witnesses){
+      const dc = 12;
+      const roll_val = d20() + GS.player.dex - 8;
+      if(roll_val < dc){
+        GS.wantedLevel++;
+        log('⚠ Caught buying illegal goods! Wanted level up.','warn');
+        updateStats();
+        // Don't complete purchase if caught
+        return;
+      } else {
+        log('You discreetly complete the purchase...','warn');
+      }
+    }
+  }
+  GS.player.gold -= price;
+  addItem(iid, 1);
+  document.getElementById('shop-gold').textContent = GS.player.gold;
+  renderShopList(SHOPS[currentShopId()], document.getElementById('overlay-box'));
+  updateStats(); renderSidebar();
+}
+
+function sellItem(iid, price){
+  if(!hasItem(iid)){ log("You don't have that.",'warn'); return; }
+  removeItem(iid);
+  addGold(price);
+  log('Sold: '+ITEMS[iid]?.name+' for '+price+'g','loot');
+  renderShopList(SHOPS[currentShopId()], document.getElementById('overlay-box'));
+  updateStats(); renderSidebar();
+}
+
+function currentShopId(){
+  // Find open shop by content
+  const title = document.querySelector('#overlay-box h2')?.textContent||'';
+  for(const [id,shop] of Object.entries(SHOPS)){
+    if(title.includes(shop.name)) return id;
+  }
+  return null;
+}
+
+function hasNearbyAuthority(){
+  const s = SCENES[GS.scene];
+  return (s.npcs||[]).some(id=>{ const n=NPCS[id]; return n && n.hostile_if_wanted; });
+}
+
+// ============================================================
+// COMBAT SYSTEM
+// ============================================================
+let CB = null; // combat state
+
+function startCombat(enemyId){
+  const eTemplate = ENEMIES[enemyId];
+  if(!eTemplate){ log('No enemy found: '+enemyId,'warn'); return; }
+  CB = {
+    enemy: { ...eTemplate, hp: eTemplate.hp },
+    playerDefending: false,
+    playerStunned: 0,
+    enemyStunned: 0,
+    playerPoisoned: 0,
+    log: [],
+    active: true,
+  };
+  log('⚔ Combat! ' + CB.enemy.name + ' attacks!', 'combat');
+  document.getElementById('c-enemy-img').src  = CB.enemy.img;
+  document.getElementById('c-enemy-name').textContent = CB.enemy.name;
+  document.getElementById('c-player-img').src  = PLAYER_IMG;
+  document.getElementById('c-player-name').textContent = GS.player.name;
+  document.getElementById('combat-overlay').classList.add('active');
+  updateCombatUI();
+}
+
+function updateCombatUI(){
+  if(!CB) return;
+  const p = GS.player;
+  const e = CB.enemy;
+  const phpPct = clamp(p.hp/p.maxHp*100,0,100);
+  const ehpPct = clamp(e.hp/e.hp===Infinity?100:e.hp/e.maxHp*100,0,100);
+  const realEhp = clamp(e.hp/e.maxHp*100,0,100);
+  document.getElementById('c-player-hp').style.width = phpPct+'%';
+  document.getElementById('c-player-hp').className = 'hp-bar'+(phpPct<25?' low':'');
+  document.getElementById('c-player-hp-text').textContent = p.hp+'/'+p.maxHp;
+  document.getElementById('c-enemy-hp').style.width = realEhp+'%';
+  document.getElementById('c-enemy-hp').className  = 'hp-bar'+(realEhp<25?' low':'');
+  document.getElementById('c-enemy-hp-text').textContent = e.hp+'/'+e.maxHp;
+  document.getElementById('combat-turn-label').textContent = 'Your Turn';
+}
+
+function combatLog(msg){ document.getElementById('combat-log').innerHTML += msg+'<br>'; const cl=document.getElementById('combat-log'); cl.scrollTop=cl.scrollHeight; }
+
+function combatAction(action){
+  if(!CB || !CB.active) return;
+  const p = GS.player;
+  const e = CB.enemy;
+
+  // Disable buttons during animation
+  document.querySelectorAll('.combat-btn').forEach(b=>b.disabled=true);
+
+  let playerDmg = 0;
+  switch(action){
+    case 'attack':{
+      const atk = playerAtk();
+      const hitRoll = d20() + Math.floor((p.dex-8)/2);
+      if(hitRoll >= 8){
+        playerDmg = Math.max(1, atk + rnd(0,3) - e.def);
+        e.hp -= playerDmg;
+        combatLog(`You attack for <b style="color:#e09050">${playerDmg}</b> damage.`);
+      } else {
+        combatLog('Your attack misses!');
+      }
+      break;
+    }
+    case 'defend':{
+      CB.playerDefending = true;
+      combatLog('You take a defensive stance. (+4 def this turn)');
+      break;
+    }
+    case 'flee':{
+      const fleeRoll = d20() + Math.floor((p.dex-8)/2);
+      if(fleeRoll >= 10){
+        CB.active = false;
+        document.getElementById('combat-overlay').classList.remove('active');
+        CB = null;
+        log('You flee from combat!','warn');
+        travelTo('world_map');
+        return;
+      } else {
+        combatLog('You fail to escape!');
+      }
+      break;
+    }
+    case 'item':{
+      // Use first available potion
+      const pslot = p.inventory.find(x=>{ const it=ITEMS[x.id]; return it && (it.hp||it.mp||it.dot||it.spell); });
+      if(pslot){
+        const item = ITEMS[pslot.id];
+        useItemInCombat(pslot.id);
+      } else {
+        combatLog('No usable items!');
+      }
+      break;
+    }
+    case 'skill':{
+      // Use first scroll in inventory
+      const scrollSlot = p.inventory.find(x=>{ const it=ITEMS[x.id]; return it&&it.type==='scroll'&&it.combat; });
+      if(scrollSlot){
+        useItemInCombat(scrollSlot.id);
+        playerDmg = ITEMS[scrollSlot.id].dmg || 0;
+      } else {
+        combatLog('No skills available!');
+      }
+      break;
+    }
+  }
+
+  // Check enemy death
+  if(e.hp <= 0){
+    combatVictory();
+    return;
+  }
+
+  // Enemy turn (after short delay)
+  setTimeout(()=>{
+    enemyTurn();
+    updateCombatUI();
+    document.querySelectorAll('.combat-btn').forEach(b=>b.disabled=false);
+    // Re-enable skill btn only if player has scrolls
+    document.getElementById('combat-skill-btn').disabled = !p.inventory.some(x=>{ const it=ITEMS[x.id]; return it&&it.type==='scroll'&&it.combat; });
+  }, 600);
+
+  updateCombatUI();
+}
+
+function useItemInCombat(iid){
+  const item = ITEMS[iid]; if(!item) return;
+  if(item.hp){ GS.player.hp = Math.min(GS.player.maxHp, GS.player.hp + item.hp); combatLog(`Used ${item.name}: +${item.hp} HP`); }
+  if(item.mp){ GS.player.mp = Math.min(GS.player.maxMp, GS.player.mp + item.mp); combatLog(`Used ${item.name}: +${item.mp} MP`); }
+  if(item.dmg && item.spell){
+    const dmg = Math.max(1, item.dmg - CB.enemy.def);
+    CB.enemy.hp -= dmg;
+    combatLog(`${item.name}: <b style="color:#c84bc8">${dmg}</b> magic damage!`);
+  }
+  if(item.dot){ CB.enemy.poisoned = 3; combatLog(`${item.name}: Enemy poisoned!`); }
+  if(item.stun){ CB.enemyStunned = item.stun; combatLog(`${item.name}: Enemy stunned for ${item.stun} turns!`); }
+  removeItem(iid, 1);
+  updateStats();
+}
+
+function enemyTurn(){
+  if(!CB) return;
+  const e = CB.enemy; const p = GS.player;
+  if(CB.enemyStunned > 0){ CB.enemyStunned--; combatLog(`${e.name} is stunned!`); return; }
+  if(CB.enemy.poisoned > 0){ CB.enemy.hp -= 5; CB.enemy.poisoned--; combatLog('Poison deals 5 damage to '+e.name+'!'); if(e.hp<=0){combatVictory();return;} }
+  const hitRoll = d20();
+  if(hitRoll >= 7){
+    let dmg = Math.max(1, e.atk + rnd(-2,2) - playerDef());
+    if(CB.playerDefending){ dmg = Math.max(0, dmg-4); CB.playerDefending=false; }
+    p.hp -= dmg;
+    combatLog(`${e.name} hits for <b style="color:#e05a5a">${dmg}</b> damage.`);
+    if(p.hp <= 0){ playerDeath(); return; }
+  } else {
+    combatLog(`${e.name}'s attack misses you!`);
+  }
+  updateStats();
+}
+
+function combatVictory(){
+  CB.active = false;
+  const e = CB.enemy;
+  combatLog(`<b style="color:#7ac87a">${e.name} is defeated!</b>`);
+  log('Victory! Defeated '+e.name, 'info');
+
+  // Gold
+  const goldAmt = rnd(e.gold[0], e.gold[1]);
+  if(goldAmt>0){ addGold(goldAmt); }
+
+  // XP
+  addXP(e.xp);
+
+  // Loot
+  for(const [iid, chance] of (e.loot||[])){
+    if(Math.random() < chance && ITEMS[iid]){ addItem(iid,1); }
+  }
+
+  // Quest tracking
+  updateQuestKills(e.id);
+
+  // Boss flags
+  const scene = SCENES[GS.scene];
+  if(scene && scene.boss_encounter === e.id && scene.boss_flag){
+    GS.flags[scene.boss_flag] = true;
+  }
+
+  setTimeout(()=>{
+    document.getElementById('combat-overlay').classList.remove('active');
+    CB = null;
+    renderSidebar(); renderScene();
+  }, 1200);
+}
+
+function playerDeath(){
+  combatLog('<b style="color:#e05a5a">You have been defeated!</b>');
+  setTimeout(()=>{
+    document.getElementById('combat-overlay').classList.remove('active');
+    CB = null;
+    GS.player.hp = Math.floor(GS.player.maxHp * 0.5);
+    GS.player.gold = Math.floor(GS.player.gold * 0.8);
+    travelTo('ashford_square');
+    log('You wake in Ashford. Some gold is missing.','warn');
+    updateStats(); renderSidebar();
+  }, 1500);
+}
+
+function updateQuestKills(enemyId){
+  for(const q of GS.activeQuests){
+    for(const obj of q.objectives){
+      if(obj.type==='kill' && obj.target===enemyId && obj.current < obj.count){
+        obj.current++;
+        obj.label = obj.label.replace(/\d+\//, obj.current+'/');
+        log('Quest: '+obj.label, 'info');
+        if(q.objectives.every(o=>o.current>=o.count)) completeQuest(q);
+      }
+    }
+  }
+}
+
+function completeQuest(q){
+  log('★ Quest complete: '+q.name, 'info');
+  addGold(q.reward.gold);
+  addXP(q.reward.xp);
+  for(const iid of (q.reward.items||[])){ addItem(iid,1); }
+  if(q.complete_flag) GS.flags[q.complete_flag] = true;
+  GS.activeQuests = GS.activeQuests.filter(x=>x.id!==q.id);
+  GS.completedQuests.push(q.id);
+}
+
+// ============================================================
+// SIDEBAR RENDERING
+// ============================================================
+function renderSidebar(){
+  const tab = GS.currentTab;
+  const tc = document.getElementById('tab-content');
+  tc.innerHTML='';
+  if(tab==='inv')   renderInventoryTab(tc);
+  if(tab==='equip') renderEquipTab(tc);
+  if(tab==='quests')renderQuestsTab(tc);
+  if(tab==='skills')renderSkillsTab(tc);
+}
+
+function renderInventoryTab(tc){
+  for(const slot of GS.player.inventory){
+    const item = ITEMS[slot.id]; if(!item) continue;
+    const row = document.createElement('div');
+    row.className='inv-item';
+    row.title = item.desc || item.name;
+    row.innerHTML=`<img src="${item.img}" onerror="this.style.background='#1a1520'">
+      <div class="iname">${item.name}${item.illegal?'<span style="color:#e05a5a;font-size:9px"> !</span>':''}</div>
+      <div class="iqty">x${slot.qty}</div>`;
+    row.addEventListener('click',()=>{ useOrEquipItem(slot.id); });
+    tc.appendChild(row);
+  }
+  if(!GS.player.inventory.length){
+    tc.innerHTML='<div style="color:#4a4a6a;padding:8px">Inventory empty.</div>';
+  }
+}
+
+function renderEquipTab(tc){
+  const slots = ['weapon','chest','helm','boots'];
+  const slotNames = {weapon:'Weapon',chest:'Chest',helm:'Helm',boots:'Boots'};
+  for(const s of slots){
+    const iid = GS.player.equip[s];
+    const item = iid ? ITEMS[iid] : null;
+    const row = document.createElement('div');
+    row.className='equip-slot';
+    if(item){
+      row.innerHTML=`<img src="${item.img}" onerror="this.style.background='#1a1520'">
+        <div><div class="slot-name">${slotNames[s]}</div><div class="slot-item">${item.name}</div></div>
+        <button class="shop-btn" style="margin-left:auto" onclick="unequip('${s}')">Remove</button>`;
+    } else {
+      row.innerHTML=`<div style="width:28px;height:28px;background:#0d0b15;border:1px solid #2a2035"></div>
+        <div><div class="slot-name">${slotNames[s]}</div><div class="slot-item" style="color:#2a2035">— empty —</div></div>`;
+    }
+    tc.appendChild(row);
+  }
+  // Stats
+  const stats = document.createElement('div');
+  stats.style.cssText='margin-top:10px;font-size:11px;color:#6a6080;padding:6px;background:#1a1828;border-radius:3px';
+  stats.innerHTML=`ATK: ${playerAtk()} | DEF: ${playerDef()}<br>STR:${GS.player.str} DEX:${GS.player.dex} INT:${GS.player.intl} CON:${GS.player.con}`;
+  tc.appendChild(stats);
+}
+
+function renderQuestsTab(tc){
+  if(!GS.activeQuests.length && !GS.completedQuests.length){
+    tc.innerHTML='<div style="color:#4a4a6a;padding:8px">No active quests.</div>';
+    return;
+  }
+  for(const q of GS.activeQuests){
+    const qd = document.createElement('div');
+    qd.style.cssText='border:1px solid #2a3050;border-radius:3px;padding:6px;margin-bottom:6px';
+    qd.innerHTML=`<div style="color:#c8a84b;font-size:12px">${q.name}</div>
+      <div style="color:#6a6080;font-size:11px;margin:2px 0">${q.desc}</div>
+      ${q.objectives.map(o=>`<div style="color:${o.current>=o.count?'#7ac87a':'#d4c5a0'};font-size:11px">• ${o.label}</div>`).join('')}`;
+    tc.appendChild(qd);
+  }
+  if(GS.completedQuests.length){
+    const cd = document.createElement('div');
+    cd.style.cssText='color:#3a6a3a;font-size:11px;margin-top:8px';
+    cd.textContent='Completed: '+GS.completedQuests.map(id=>QUESTS[id]?.name||id).join(', ');
+    tc.appendChild(cd);
+  }
+}
+
+function renderSkillsTab(tc){
+  tc.innerHTML='<div style="color:#6a6080;font-size:11px;margin-bottom:8px">Combat skills & scrolls</div>';
+  const scrolls = GS.player.inventory.filter(x=>ITEMS[x.id]?.type==='scroll');
+  if(!scrolls.length){ tc.innerHTML+='<div style="color:#4a4a6a;font-size:11px">No scrolls in inventory.<br>Buy or find scrolls to gain skills.</div>'; }
+  for(const slot of scrolls){
+    const item = ITEMS[slot.id];
+    const row = document.createElement('div');
+    row.className='inv-item';
+    row.innerHTML=`<img src="${item.img}" onerror="this.style.background='#1a1520'">
+      <div class="iname">${item.name}</div><div class="iqty">x${slot.qty}</div>`;
+    tc.appendChild(row);
+  }
+  tc.innerHTML+='<hr style="border-color:#1a1828;margin:8px 0"><div style="color:#6a6080;font-size:11px">Crafting (coming soon)<br>• Alchemy: herbs → potions<br>• Enchanting: dust+rune → enchanted gear<br>• Spellmaking: scrolls+materials</div>';
+}
+
+function useOrEquipItem(iid){
+  const item = ITEMS[iid]; if(!item) return;
+  if(item.slot){
+    GS.player.equip[item.slot] = iid;
+    log('Equipped: '+item.name,'info');
+  } else if(item.hp && !CB){
+    GS.player.hp = Math.min(GS.player.maxHp, GS.player.hp + item.hp);
+    removeItem(iid,1);
+    log('Used '+item.name+': +'+item.hp+' HP','info');
+    updateStats();
+  } else if(item.mp && !CB){
+    GS.player.mp = Math.min(GS.player.maxMp, GS.player.mp + item.mp);
+    removeItem(iid,1);
+    log('Used '+item.name+': +'+item.mp+' MP','info');
+    updateStats();
+  } else {
+    log(item.name+': '+( item.desc||'(no description)'),'info');
+  }
+  renderSidebar();
+}
+
+function unequip(slot){
+  const iid = GS.player.equip[slot];
+  if(iid){ GS.player.equip[slot]=null; log('Removed: '+ITEMS[iid]?.name,'info'); }
+  renderSidebar();
+}
+
+function showTab(t){
+  GS.currentTab = t;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  event.target.classList.add('active');
+  renderSidebar();
+}
+
+// ============================================================
+// QUEST ITEM CHECK ON PICKUP
+// ============================================================
+const _origAddItem = addItem;
+
+// ============================================================
+// INIT
+// ============================================================
+function init(){
+  resizeCanvas();
+  travelTo('world_map');
+  log('Welcome to Mythward — Island of Fortuna.','info');
+  log('Year 500 Post-Atlas. The Rift tears wider every day.','info');
+  log('Click the map to travel. Click NPCs to talk.','info');
+  updateStats();
+  renderSidebar();
+  // Check scrolls for skill button
+  document.getElementById('combat-skill-btn').disabled = true;
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

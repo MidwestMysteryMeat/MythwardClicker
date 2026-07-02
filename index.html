@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mythward — Island of Fortuna</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0a0a0f; color: #d4c5a0; font-family: 'Georgia', serif; height: 100vh; display: flex; flex-direction: column; }
+#header { background: #1a1520; border-bottom: 2px solid #5a4a2a; padding: 6px 12px; display: flex; align-items: center; gap: 16px; }
+#header h1 { font-size: 18px; color: #c8a84b; letter-spacing: 2px; }
+#statbar { display: flex; gap: 12px; font-size: 13px; flex-wrap: wrap; align-items: center; }
+.stat-hp { color: #e05a5a; } .stat-mp { color: #5a8ae0; } .stat-gold { color: #c8a84b; } .stat-xp { color: #7ac87a; }
+#s-time { color: #8a9ac8; } #s-wanted { color: #e05a5a; }
+#sys-btns { margin-left: auto; display: flex; gap: 6px; }
+.sys-btn { background: #2a2035; border: 1px solid #5a4a2a; color: #8a7a5a; padding: 3px 10px; cursor: pointer; font-size: 11px; border-radius: 3px; }
+.sys-btn:hover { color: #c8a84b; border-color: #c8a84b; }
+#main { display: flex; flex: 1; overflow: hidden; }
+#game-area { position: relative; flex: 1; min-width: 0; }
+#game-canvas { display: block; width: 100%; height: 100%; }
+#npc-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+.npc-sprite { position: absolute; transform: translate(-50%, -50%); cursor: pointer; pointer-events: all; text-align: center; transition: transform 0.15s; }
+.npc-sprite:hover { transform: translate(-50%, -50%) scale(1.08); }
+.npc-sprite img { width: 72px; height: 72px; object-fit: cover; border: 2px solid #5a4a2a; border-radius: 4px; display: block; background: #2a2020; }
+.npc-sprite .npc-label { font-size: 11px; color: #c8a84b; text-shadow: 1px 1px 2px #000; margin-top: 2px; white-space: nowrap; }
+.exit-btn { position: absolute; transform: translate(-50%, -50%); background: rgba(20,15,30,0.88); border: 1px solid #5a4a2a; color: #c8a84b; padding: 6px 12px; cursor: pointer; font-size: 12px; border-radius: 3px; pointer-events: all; font-family: Georgia, serif; white-space: nowrap; }
+.exit-btn:hover { background: rgba(90,74,42,0.6); border-color: #c8a84b; }
+.tool-btn { border-color: #3a5a8a; color: #8ab0e0; }
+.tool-btn:hover { background: rgba(40,60,100,0.5); border-color: #8ab0e0; }
+.loot-btn { border-color: #8a7a2a; color: #e0c860; }
+#sidebar { width: 270px; background: #12101a; border-left: 2px solid #2a2035; display: flex; flex-direction: column; }
+#tab-bar { display: flex; border-bottom: 1px solid #2a2035; }
+.tab { flex: 1; padding: 7px 2px; text-align: center; cursor: pointer; font-size: 11px; background: #1a1828; color: #8a7a5a; border: none; font-family: Georgia, serif; }
+.tab.active { background: #2a2035; color: #c8a84b; border-bottom: 2px solid #c8a84b; }
+#tab-content { flex: 1; overflow-y: auto; padding: 8px; font-size: 12px; }
+.inv-item { display: flex; align-items: center; gap: 6px; padding: 4px; border-radius: 3px; cursor: pointer; border: 1px solid transparent; margin-bottom: 2px; }
+.inv-item:hover { border-color: #5a4a2a; background: #1e1c2a; }
+.inv-item img { width: 32px; height: 32px; object-fit: contain; background: #0d0b15; border: 1px solid #2a2035; }
+.inv-item .iname { color: #d4c5a0; flex: 1; }
+.inv-item .iqty { color: #8a7a5a; }
+.equip-slot { display: flex; align-items: center; gap: 6px; padding: 5px; margin: 2px 0; background: #1a1828; border: 1px solid #2a2035; border-radius: 3px; }
+.equip-slot img { width: 28px; height: 28px; object-fit: contain; }
+.equip-slot .slot-name { color: #6a6080; font-size: 11px; }
+.equip-slot .slot-item { color: #c8a84b; font-size: 12px; }
+#log-area { height: 130px; background: #0d0b15; border-top: 2px solid #2a2035; display: flex; flex-direction: column; }
+#log-header { padding: 4px 10px; font-size: 11px; color: #6a6080; background: #12101a; border-bottom: 1px solid #1a1828; }
+#log { flex: 1; overflow-y: auto; padding: 6px 10px; font-size: 12px; line-height: 1.5; }
+.log-line { padding: 1px 0; }
+.log-line.combat { color: #e05a5a; }
+.log-line.info { color: #7ac87a; }
+.log-line.loot { color: #c8a84b; }
+.log-line.warn { color: #e09050; }
+.log-line.magic { color: #b07ae0; }
+/* OVERLAYS */
+#overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; z-index: 100; align-items: center; justify-content: center; }
+#overlay.active { display: flex; }
+#overlay-box { background: #1a1520; border: 2px solid #5a4a2a; border-radius: 6px; padding: 20px; max-width: 560px; width: 92%; max-height: 82vh; overflow-y: auto; }
+#overlay-box h2 { color: #c8a84b; margin-bottom: 10px; font-size: 16px; }
+#overlay-box h3 { color: #8a7a5a; font-size: 13px; margin: 8px 0 4px; }
+.dlg-portrait { display: flex; gap: 14px; margin-bottom: 12px; }
+.dlg-portrait img { width: 80px; height: 80px; object-fit: cover; border: 2px solid #5a4a2a; flex-shrink: 0; background: #2a2020; }
+.dlg-text { font-size: 13px; line-height: 1.6; color: #d4c5a0; white-space: pre-line; }
+.dlg-options { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.dlg-btn { background: #2a2035; border: 1px solid #5a4a2a; color: #d4c5a0; padding: 8px 12px; cursor: pointer; border-radius: 3px; text-align: left; font-size: 13px; font-family: Georgia, serif; }
+.dlg-btn:hover { background: #3a3050; border-color: #c8a84b; color: #c8a84b; }
+.dlg-btn:disabled { opacity: 0.35; cursor: default; }
+.dlg-btn.quest-ready { border-color: #7ac87a; color: #7ac87a; }
+/* COMBAT */
+#combat-overlay { position: fixed; inset: 0; background: #0a0810; display: none; z-index: 200; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+#combat-overlay.active { display: flex; }
+#combat-arena { display: flex; gap: 60px; align-items: flex-end; justify-content: center; }
+.combatant { text-align: center; width: 130px; }
+.combatant img { width: 90px; height: 90px; object-fit: contain; border: 2px solid #5a4a2a; border-radius: 4px; background: #1a1520; }
+.combatant .cname { color: #c8a84b; font-size: 13px; margin-top: 4px; }
+.hp-bar-wrap { background: #1a1520; height: 10px; border-radius: 3px; margin: 4px 0; overflow: hidden; }
+.hp-bar { background: #7ac87a; height: 100%; transition: width 0.3s; }
+.hp-bar.low { background: #e05a5a; }
+.status-row { min-height: 16px; font-size: 12px; }
+#combat-log { background: #12101a; border: 1px solid #2a2035; width: 500px; max-width: 92vw; height: 96px; overflow-y: auto; padding: 8px; font-size: 12px; border-radius: 4px; }
+#combat-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; max-width: 92vw; }
+.combat-btn { background: #2a2035; border: 1px solid #5a4a2a; color: #d4c5a0; padding: 10px 16px; cursor: pointer; border-radius: 4px; font-size: 13px; min-width: 90px; font-family: Georgia, serif; }
+.combat-btn:hover:not(:disabled) { background: #3a3050; border-color: #c8a84b; color: #c8a84b; }
+.combat-btn:disabled { opacity: 0.4; cursor: default; }
+#combat-turn-label { color: #6a6080; font-size: 12px; }
+#combat-picker { display: none; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 92vw; }
+#combat-picker .dlg-btn { font-size: 12px; padding: 6px 10px; }
+/* SHOP */
+.shop-item { display: flex; align-items: center; gap: 8px; padding: 6px; border-bottom: 1px solid #1a1828; }
+.shop-item img { width: 36px; height: 36px; object-fit: contain; background: #0d0b15; }
+.shop-item .sname { flex: 1; color: #d4c5a0; font-size: 13px; }
+.shop-item .sprice { color: #c8a84b; font-size: 12px; margin-right: 6px; }
+.shop-btn { background: #2a2035; border: 1px solid #3a3050; color: #c8a84b; padding: 4px 8px; cursor: pointer; font-size: 11px; border-radius: 3px; font-family: Georgia, serif; }
+.shop-btn:hover { background: #3a3050; }
+/* CRAFTING */
+.recipe-row { border: 1px solid #2a2035; border-radius: 3px; padding: 8px; margin-bottom: 6px; }
+.recipe-row .rname { color: #c8a84b; font-size: 13px; }
+.recipe-row .rins { color: #8a7a5a; font-size: 11px; margin: 3px 0; }
+.recipe-row .rins .have { color: #7ac87a; } .recipe-row .rins .miss { color: #e05a5a; }
+::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #0d0b15; } ::-webkit-scrollbar-thumb { background: #2a2035; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>⚔ MYTHWARD</h1>
+  <div id="statbar">
+    <span class="stat-hp" id="s-hp">HP: 100/100</span>
+    <span class="stat-mp" id="s-mp">MP: 50/50</span>
+    <span class="stat-gold" id="s-gold">Gold: 50</span>
+    <span class="stat-xp" id="s-xp">XP: 0/100</span>
+    <span id="s-level" style="color:#8a7a5a">Lv.1</span>
+    <span id="s-time">Day 1 · 08:00</span>
+    <span id="s-weight" style="color:#6a6080"></span>
+    <span id="s-wanted" style="display:none">⚠ WANTED</span>
+  </div>
+  <div id="sys-btns">
+    <button class="sys-btn" onclick="saveGame(true)">💾 Save</button>
+    <button class="sys-btn" onclick="loadGame(true)">📂 Load</button>
+    <button class="sys-btn" onclick="confirmNewGame()">✦ New</button>
+  </div>
+</div>
+
+<div id="main">
+  <div id="game-area">
+    <canvas id="game-canvas"></canvas>
+    <div id="npc-layer"></div>
+  </div>
+  <div id="sidebar">
+    <div id="tab-bar">
+      <button class="tab active" data-tab="inv" onclick="showTab('inv',this)">Items</button>
+      <button class="tab" data-tab="equip" onclick="showTab('equip',this)">Equip</button>
+      <button class="tab" data-tab="quests" onclick="showTab('quests',this)">Quests</button>
+      <button class="tab" data-tab="magic" onclick="showTab('magic',this)">Magic</button>
+    </div>
+    <div id="tab-content"></div>
+  </div>
+</div>
+
+<div id="log-area">
+  <div id="log-header">— Adventure Log —</div>
+  <div id="log"></div>
+</div>
+
+<!-- DIALOGUE / SHOP / CRAFT OVERLAY -->
+<div id="overlay">
+  <div id="overlay-box"></div>
+</div>
+
+<!-- COMBAT OVERLAY -->
+<div id="combat-overlay">
+  <div id="combat-turn-label">Your Turn</div>
+  <div id="combat-arena">
+    <div class="combatant" id="c-player">
+      <img id="c-player-img" src="" alt="Player">
+      <div class="cname" id="c-player-name">Adventurer</div>
+      <div class="hp-bar-wrap"><div class="hp-bar" id="c-player-hp" style="width:100%"></div></div>
+      <div style="font-size:11px;color:#888" id="c-player-hp-text">100/100</div>
+      <div class="status-row" id="c-player-status"></div>
+    </div>
+    <div style="font-size:28px;color:#5a4a2a;align-self:center">VS</div>
+    <div class="combatant" id="c-enemy">
+      <img id="c-enemy-img" src="" alt="Enemy">
+      <div class="cname" id="c-enemy-name">Enemy</div>
+      <div class="hp-bar-wrap"><div class="hp-bar" id="c-enemy-hp" style="width:100%"></div></div>
+      <div style="font-size:11px;color:#888" id="c-enemy-hp-text">50/50</div>
+      <div class="status-row" id="c-enemy-status"></div>
+    </div>
+  </div>
+  <div id="combat-log"></div>
+  <div id="combat-picker"></div>
+  <div id="combat-actions">
+    <button class="combat-btn" onclick="combatAction('attack')">⚔ Attack</button>
+    <button class="combat-btn" onclick="combatAction('defend')">🛡 Defend</button>
+    <button class="combat-btn" onclick="combatAction('skill')" id="combat-skill-btn">✨ Skill</button>
+    <button class="combat-btn" onclick="combatAction('item')">🧪 Item</button>
+    <button class="combat-btn" onclick="combatAction('flee')">💨 Flee</button>
+  </div>
+</div>
+
+<script src="src/utils.js"></script>
+<script src="src/data/items.js"></script>
+<script src="src/data/enemies.js"></script>
+<script src="src/data/npcs.js"></script>
+<script src="src/data/scenes.js"></script>
+<script src="src/data/quests.js"></script>
+<script src="src/data/recipes.js"></script>
+<script src="src/state.js"></script>
+<script src="src/systems/quest.js"></script>
+<script src="src/systems/stealth.js"></script>
+<script src="src/systems/economy.js"></script>
+<script src="src/systems/crafting.js"></script>
+<script src="src/render/combat_ui.js"></script>
+<script src="src/systems/combat.js"></script>
+<script src="src/render/scene.js"></script>
+<script src="src/render/ui.js"></script>
+<script src="save.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
